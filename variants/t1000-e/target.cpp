@@ -12,6 +12,7 @@ WRAPPER_CLASS radio_driver(radio, board);
 VolatileRTCClock rtc_clock;
 MicroNMEALocationProvider nmea = MicroNMEALocationProvider(Serial1, &rtc_clock);
 T1000SensorManager sensors = T1000SensorManager(nmea);
+bool gps_tmp_flag = false;
 
 #ifdef DISPLAY_CLASS
   NullDisplayDriver display;
@@ -151,6 +152,11 @@ bool T1000SensorManager::begin() {
 
 bool T1000SensorManager::querySensors(uint8_t requester_permissions, CayenneLPP& telemetry) {
   if (requester_permissions & TELEM_PERM_LOCATION) {   // does requester have permission?
+    if (!gps_active) {
+      gps_tmp_flag = true;
+      MESH_DEBUG_PRINTLN("[GPS] GPS request flag set. Starting GPS for location fix.");
+      start_gps();
+    }
     telemetry.addGPS(TELEM_CHANNEL_SELF, node_lat, node_lon, node_altitude);
   }
   if (requester_permissions & TELEM_PERM_ENVIRONMENT) {
@@ -172,6 +178,11 @@ void T1000SensorManager::loop() {
       node_lon = ((double)_nmea->getLongitude())/1000000.;
       node_altitude = ((double)_nmea->getAltitude()) / 1000.0;
       //Serial.printf("lat %f lon %f\r\n", _lat, _lon);
+      if (gps_tmp_flag) {
+        MESH_DEBUG_PRINTLN("[GPS] GPS location fix obtained. Disabling GPS.");
+        gps_tmp_flag = false;
+        stop_gps();
+      }
     }
     next_gps_update = millis() + 1000;
   }
